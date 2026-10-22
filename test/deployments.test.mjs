@@ -12,11 +12,17 @@ test('valid signed current-main source run maps to the fixed deployment target',
 test('caller cannot redirect repositories, target, immutable identity or revision',()=>{for(const change of [{repository:'attacker/personal-control'},{repository_id:'1'},{sha:'main'},{target:'signing-control'},{source_run_id:'../123'}])assert.throws(()=>validateDeploymentRequest({...q,...change}));});
 test('reject unsigned, stale, failed, forked, PR and substituted workflow source',async()=>{for(const change of [{commit:{commit:{verification:{verified:false}}}},{head:'b'.repeat(40)},{run:{conclusion:'failure'}},{run:{event:'pull_request'}},{repo:{fork:true}},{workflow:{path:'.github/workflows/other.yml'}}])await assert.rejects(verifyDeploymentRequest(q,fixture(change)));});
 test('runtime targets remain blocked before any credential or deployment action',async()=>{const {services,requireCommissioned}=await import('../src/deployments.mjs');for(const service of services){if(service.state==='source-only')assert.doesNotThrow(()=>requireCommissioned(service));else assert.throws(()=>requireCommissioned(service),/Deployment blocked/);}});
+test('renamed signer target is registered by immutable ID but cannot deploy before commissioning',()=>{
+ const signer={...q,repository:'susanbeasles/signer',repository_id:'1416201242',target:'signing-control'};
+ assert.equal(validateDeploymentRequest(signer).service.state,'blocked');
+ assert.throws(()=>validateDeploymentRequest({...signer,repository:'susanbeasles/signing_control'}),/Unregistered source identity/);
+ assert.throws(()=>validateDeploymentRequest({...signer,repository_id:'1'}),/Unregistered source identity/);
+});
 test('source receipt exception cannot authorize a runtime target',async()=>{await assert.rejects(verifyDeploymentRequest(q,fixture(),{self:true}),/Invalid controller source receipt/);});
-test('retired Worker targets cannot be reintroduced through dispatch',()=>{for(const [target,repository,repository_id] of [['deployment-authority','susanbeasles/workflow_depot','1405415683'],['cloudflare-deployer','susanbeasles/delivery_control','1405415291']])assert.throws(()=>validateDeploymentRequest({...q,target,repository,repository_id}),/Unregistered/);});
+test('retired Worker targets cannot be reintroduced through dispatch',()=>{for(const [target,repository,repository_id] of [['deployment-authority','susanbeasles/workflow_depot','1405415683'],['cloudflare-deployer','susanbeasles/deployer','1405415291']])assert.throws(()=>validateDeploymentRequest({...q,target,repository,repository_id}),/Unregistered/);});
 test('dedicated application sources own their targets, shared login does not',()=>{for(const [target,repository,repository_id] of [['ghcaretaker','susanbeasles/ghcaretaker','1405513776'],['backup-control','susanbeasles/backup-control','1407276404'],['backup-setup','susanbeasles/backup-control','1407276404']]){assert.throws(()=>validateDeploymentRequest({...q,target}));assert.equal(validateDeploymentRequest({...q,target,repository,repository_id}).repository,repository);}});
 test('controller main receipt verifies its in-progress push using only read access',async()=>{
- const self={repository:'susanbeasles/delivery_control',repository_id:'1405415291',sha:'c'.repeat(40),source_run_id:'999',target:'delivery-control-source'};
+ const self={repository:'susanbeasles/deployer',repository_id:'1405415291',sha:'c'.repeat(40),source_run_id:'999',target:'delivery-control-source'};
  const api={request:async path=>{
   if(path.endsWith('/actions/runs/999'))return {event:'push',head_branch:'main',head_sha:self.sha,repository:{id:1405415291},status:'in_progress',workflow_id:8};
   if(path.endsWith('/actions/workflows/8'))return {path:'.github/workflows/deploy.yml'};

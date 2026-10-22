@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   source:
-    if: github.repository == 'susanbeasles/delivery_control' && github.repository_id == '1405415291' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.repository == 'susanbeasles/deployer' && github.repository_id == '1405415291' && github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -50,7 +50,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
   admit:
-    if: github.repository == 'susanbeasles/delivery_control' && github.repository_id == '1405415291' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'susanbeasles/deployer' && github.repository_id == '1405415291' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     environment: deploy
     runs-on: ubuntu-24.04
     timeout-minutes: 5

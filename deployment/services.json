@@ -98,7 +98,7 @@
     {
       "target": "cloudflare-deployer",
       "purpose": "Executes authorized artifact deployments",
-      "repository": "susanbeasles/delivery_control",
+      "repository": "susanbeasles/deployer",
       "repository_id": "1405415291",
       "module": "deployment/wrangler.deployer.jsonc",
       "workers": [
@@ -154,7 +154,7 @@
     {
       "target": "signing-control",
       "purpose": "Standalone signing application and matching container",
-      "repository": "susanbeasles/signing_control",
+      "repository": "susanbeasles/signer",
       "repository_id": "1416201242",
       "module": "deployment/deploy.mjs",
       "workers": [
@@ -203,7 +203,7 @@
     {
       "target": "delivery-control-source",
       "purpose": "Controller workflow source publication; no additional running service",
-      "repository": "susanbeasles/delivery_control",
+      "repository": "susanbeasles/deployer",
       "repository_id": "1405415291",
       "module": ".",
       "workers": [],
