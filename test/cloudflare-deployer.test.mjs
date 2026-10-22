@@ -19,9 +19,9 @@ async function fixture() {
   const artifact = { schema: 'workflow-depot-worker-artifact/v1', metadata, modules: [{ name: 'worker.mjs', type: 'esm', content: 'export default {fetch(){return new Response("fixture")}};' }] };
   const bytes = new TextEncoder().encode(JSON.stringify(artifact));
   const trust = {
-    repository: 'susanbeasles/delivery_control', repositoryID: 2, ownerID: 215839550,
-    actorIDs: [215839550], eventNames: ['workflow_dispatch'], ref: 'refs/heads/main', workflowRef: 'susanbeasles/delivery_control/.github/workflows/cloudflare-deploy.yml@refs/heads/main',
-    workflowSHA: 'a'.repeat(40), jobWorkflowRef: 'susanbeasles/delivery_control/.github/workflows/cloudflare-deploy.yml@refs/heads/main',
+    repository: 'susanbeasles/deployer', repositoryID: 2, ownerID: 215839550,
+    actorIDs: [215839550], eventNames: ['workflow_dispatch'], ref: 'refs/heads/main', workflowRef: 'susanbeasles/deployer/.github/workflows/cloudflare-deploy.yml@refs/heads/main',
+    workflowSHA: 'a'.repeat(40), jobWorkflowRef: 'susanbeasles/deployer/.github/workflows/cloudflare-deploy.yml@refs/heads/main',
     jobWorkflowSHA: 'a'.repeat(40), audiencePrefix: 'delivery-control-cloudflare',
   };
   const target = { accountID: 'a'.repeat(32), scriptName: 'fixture-worker', zoneID: 'b'.repeat(32), hostname: 'app.example.com', metadataDigest: hash(canonical(metadata)), sourceRepository: 'susanbeasles/fixture', sourceRepositoryID: 3 };

@@ -1,6 +1,6 @@
 # Centralized source releases
 
-Every push to `main` in an enrolled repository dispatches `release.yml` in `susanbeasles/delivery_control`. The receiver creates an annotated `vMAJOR.MINOR.PATCH` tag at the exact push SHA and publishes a stable GitHub release. This path is independent of repoctl and its broker.
+Every push to `main` in an enrolled repository dispatches `release.yml` in `susanbeasles/deployer`. The receiver creates an annotated `vMAJOR.MINOR.PATCH` tag at the exact push SHA and publishes a stable GitHub release. This path is independent of repoctl and its broker.
 
 ## Version policy
 
@@ -52,8 +52,8 @@ Land that commit through your existing authorized promotion process. `workflow_d
 Configure the central variable and secret interactively, without pasting a key into command history:
 
 ```sh
-gh variable set RELEASE_APP_CLIENT_ID --repo susanbeasles/delivery_control
-gh secret set RELEASE_APP_PRIVATE_KEY --repo susanbeasles/delivery_control
+gh variable set RELEASE_APP_CLIENT_ID --repo susanbeasles/deployer
+gh secret set RELEASE_APP_PRIVATE_KEY --repo susanbeasles/deployer
 ```
 
 ## Enroll each repository

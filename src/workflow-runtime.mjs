@@ -11,7 +11,7 @@ import {createCloudflareProvider} from './cloudflare-provider.mjs';
 import {canonical,digest,sha256,validatePolicy,validateArtifact} from './shared/contract.mjs';
 const need=v=>{if(!v)throw Error('Deployment workflow configuration or evidence denied');};
 export function controllerContext(env){
-  need(env.GITHUB_REPOSITORY==='susanbeasles/delivery_control'&&env.GITHUB_REPOSITORY_ID==='1405415291'&&env.GITHUB_EVENT_NAME==='workflow_dispatch'&&env.GITHUB_REF==='refs/heads/main'&&/^[a-f0-9]{40}$/.test(env.GITHUB_SHA??''));
+  need(env.GITHUB_REPOSITORY==='susanbeasles/deployer'&&env.GITHUB_REPOSITORY_ID==='1405415291'&&env.GITHUB_EVENT_NAME==='workflow_dispatch'&&env.GITHUB_REF==='refs/heads/main'&&/^[a-f0-9]{40}$/.test(env.GITHUB_SHA??''));
   need(/^[1-9]\d*$/.test(env.GITHUB_RUN_ID??'')&&/^[1-9]\d*$/.test(env.GITHUB_RUN_ATTEMPT??''));
   return {repository:env.GITHUB_REPOSITORY,repositoryID:1405415291,sha:env.GITHUB_SHA,runID:Number(env.GITHUB_RUN_ID),runAttempt:Number(env.GITHUB_RUN_ATTEMPT)};
 }

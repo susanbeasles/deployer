@@ -19,7 +19,7 @@ export async function verifyDeploymentRequest(input,api,{sleep=ms=>new Promise(r
     if(i+1<attempts) await sleep(5000);
   }
   if(run?.event!=='push'||run.head_branch!=='main'||run.head_sha!==q.sha||run.repository?.id!==q.repositoryID||(!self&&(run.status!=='completed'||run.conclusion!=='success'))) throw Error('Source run must be a successful exact main push');
-  if(self&&(q.repository!=='susanbeasles/delivery_control'||q.target!=='delivery-control-source')) throw Error('Invalid controller source receipt');
+  if(self&&(q.repository!=='susanbeasles/deployer'||q.target!=='delivery-control-source')) throw Error('Invalid controller source receipt');
   const workflow=await api.request(`${root}/actions/workflows/${run.workflow_id}`);
   if(workflow?.path!=='.github/workflows/deploy.yml') throw Error('Unexpected source workflow');
   const commit=await api.request(`${root}/commits/${q.sha}`);
@@ -34,7 +34,7 @@ export function requireCommissioned(service) {
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   try {
     const env=process.env;
-    if(env.GITHUB_REPOSITORY!=='susanbeasles/delivery_control'||env.GITHUB_REPOSITORY_ID!=='1405415291'||env.GITHUB_REF!=='refs/heads/main') throw Error('Controller main required');
+    if(env.GITHUB_REPOSITORY!=='susanbeasles/deployer'||env.GITHUB_REPOSITORY_ID!=='1405415291'||env.GITHUB_REF!=='refs/heads/main') throw Error('Controller main required');
     const self=env.GITHUB_EVENT_NAME==='push';
     const input=self?{repository:env.GITHUB_REPOSITORY,repository_id:env.GITHUB_REPOSITORY_ID,sha:env.GITHUB_SHA,source_run_id:env.GITHUB_RUN_ID,target:'delivery-control-source'}:JSON.parse(env.DEPLOY_REQUEST_JSON??'{}');
     if(!self&&env.GITHUB_EVENT_NAME!=='workflow_dispatch') throw Error('Explicit deployment dispatch required');
