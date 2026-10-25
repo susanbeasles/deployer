@@ -297,27 +297,45 @@ export class JobController<Gate> {
     // An uncertain apply blocks every later apply on its stack until a human clears the lock.
     if (outcome.state === 'uncertain' && profile.operation === 'apply' && profile.stack !== null && !record.stackLocked) {
       const subject = parseTerraformSubject(request.input, { stack: profile.stack, operation: 'apply' });
-      try {
-        const plans = this.deps.plans;
-        if (plans === null) fail('plans_unbound', 'Cannot lock an uncertain infrastructure apply without the plan bucket');
-        const written = await writeStackLock(plans, {
-          schema: 'stack-lock/v1',
-          stack: subject.stack,
-          jobId: request.jobId,
-          type: request.type,
-          commit: subject.commit,
-          treeSha: subject.treeSha,
-          reason: outcome.error?.code ?? 'uncertain',
-          lockedAt: isoAt(this.deps.clock.now()),
-        });
+      if (this.deps.plans === null) {
+        // The binding may be removed while a legacy Terraform apply is
+        // cleaning up. The outcome must remain uncertain; there is no lock.
+        // Always destroy the container and require operator reconciliation
+        // before enabling another infrastructure executor.
         this.update((r) => {
-          r.stackLocked = true;
+          r.outcome = {
+            state: 'uncertain',
+            result: null,
+            error: {
+              code: 'stack_lock_unavailable',
+              message: 'Terraform apply outcome uncertain; plan storage unavailable. Reconcile state before further applies.',
+            },
+          };
         });
-        log('error', 'runner.stack_locked', { jobId: request.jobId, stack: subject.stack, lock: written });
-      } catch (error) {
-        log('error', 'runner.stack_lock_failed', { jobId: request.jobId, code: summarize(error).code });
-        await this.deps.storage.setAlarm(this.deps.clock.now() + LIMITS.cleanupRetryMs);
-        return;
+        log('error', 'runner.stack_lock_unavailable', { jobId: request.jobId, stack: subject.stack });
+      } else {
+        try {
+          const plans = this.deps.plans;
+          if (plans === null) fail('plans_unbound', 'Cannot lock an uncertain infrastructure apply without the plan bucket');
+          const written = await writeStackLock(plans, {
+            schema: 'stack-lock/v1',
+            stack: subject.stack,
+            jobId: request.jobId,
+            type: request.type,
+            commit: subject.commit,
+            treeSha: subject.treeSha,
+            reason: outcome.error?.code ?? 'uncertain',
+            lockedAt: isoAt(this.deps.clock.now()),
+          });
+          this.update((r) => {
+            r.stackLocked = true;
+          });
+          log('error', 'runner.stack_locked', { jobId: request.jobId, stack: subject.stack, lock: written });
+        } catch (error) {
+          log('error', 'runner.stack_lock_failed', { jobId: request.jobId, code: summarize(error).code });
+          await this.deps.storage.setAlarm(this.deps.clock.now() + LIMITS.cleanupRetryMs);
+          return;
+        }
       }
     }
 
