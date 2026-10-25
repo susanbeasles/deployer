@@ -22,6 +22,7 @@ import {
 import { parseConftestOutput } from './policy.mjs';
 import { runTool } from './process.mjs';
 import { extractTarball } from './tar.mjs';
+import { checkTrustedHcl } from './hcl-approval.mjs';
 
 /**
  * `terraform.plan` / `root.plan` and `terraform.apply` / `root.apply`. The stack's code comes from
@@ -125,6 +126,9 @@ export async function runPlan(ctx) {
   const policyRepo = extract(ctx, 'policy.tar.gz', join(ctx.workdir, 'policy-repo'));
   const policyDir = join(policyRepo, input.policyDirectory);
   if (!existsSync(policyDir) || !lstatSync(policyDir).isDirectory()) fail('policy_missing', `infra-root main has no ${input.policyDirectory}/ directory`);
+  // Mandatory independent HCL allowlist gate; no Tofu process or egress token
+  // is available to candidate infrastructure until these exact hashes match.
+  checkTrustedHcl(src, policyRepo, input.stack);
 
   await init(ctx, src, input);
   const before = await pullState(ctx, src);
