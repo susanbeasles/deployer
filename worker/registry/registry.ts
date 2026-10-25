@@ -63,7 +63,7 @@ export interface Registry {
 
 const CODE = 'registry_invalid';
 export const MAX_REGISTRY_BYTES = 512 * 1024;
-export const FORBIDDEN_SCRIPTS = new Set(['deployer', 'authorizer', 'root-runner']);
+export const FORBIDDEN_SCRIPTS = new Set(['deployer', 'authorizer', 'infra-runner', 'root-runner']);
 /**
  * Control-plane resources application code may never bind: the Secrets Store holding the deployer's
  * and runners' credentials, every bucket of the deploy estate, and the deploy queues. A binding is
