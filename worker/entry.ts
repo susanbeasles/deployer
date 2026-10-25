@@ -7,7 +7,6 @@ import { isoAt, log, systemClock, uuidv7 } from './lib/runtime.ts';
 import { PATTERNS, Shape } from './lib/validate.ts';
 import { resolveEnvironment } from './registry/registry.ts';
 import { registry } from './wiring.ts';
-import type { RunnerJobStatus } from './runner/api.ts';
 
 /**
  * The deployer's only inbound surfaces: RPC from the authorizer (service binding, entrypoint
