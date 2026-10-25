@@ -48,6 +48,10 @@ test('unknown, missing, or mistyped runner roles cannot execute Terraform', () =
       assert.equal(permitsWorkerJob(role, kind), false, String(role) + ' ' + kind);
     }
   }
+  assert.equal(permitsWorkerJob('infra', 'terraform.plan'), true);
+  assert.equal(permitsWorkerJob('infra', 'terraform.apply'), true);
+  assert.equal(permitsWorkerJob('infra', 'release.verify'), false);
+  assert.equal(permitsWorkerJob('infra', 'root.plan'), false);
   assert.equal(permitsWorkerJob('root', 'root.plan'), true);
   assert.equal(permitsWorkerJob('root', 'root.apply'), true);
   assert.equal(permitsWorkerJob('root', 'terraform.apply'), false);
