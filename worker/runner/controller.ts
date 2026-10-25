@@ -51,7 +51,7 @@ export interface ControllerDeps<Gate> {
   objectName: string | null;
   prepare(request: RunnerJobRequest): Promise<Preparation>;
   logs: LogBucket;
-  plans: PlanBucket;
+  plans: PlanBucket | null;
   /** Best-effort GitHub reporting after the job is terminal. */
   report(record: JobRecord, status: RunnerJobStatus): Promise<void>;
   /** Best-effort coordinator nudge after the job is terminal. */
@@ -298,7 +298,9 @@ export class JobController<Gate> {
     if (outcome.state === 'uncertain' && profile.operation === 'apply' && profile.stack !== null && !record.stackLocked) {
       const subject = parseTerraformSubject(request.input, { stack: profile.stack, operation: 'apply' });
       try {
-        const written = await writeStackLock(this.deps.plans, {
+        const plans = this.deps.plans;
+        if (plans === null) fail('plans_unbound', 'Cannot lock an uncertain infrastructure apply without the plan bucket');
+        const written = await writeStackLock(plans, {
           schema: 'stack-lock/v1',
           stack: subject.stack,
           jobId: request.jobId,
