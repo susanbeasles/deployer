@@ -39,7 +39,7 @@ export async function submitTerraformJob(
     input: subject as Json,
     notify: null,
   };
-  parseJobRequest(request, 'deployer');
+  parseJobRequest(request, 'infra');
   checkDeadline(request, now);
   return runnerStub(env, request.jobId).submit(request);
 }
