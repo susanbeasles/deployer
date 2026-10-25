@@ -25,7 +25,7 @@ export interface ReadBucket {
 }
 
 export interface PrepareDeps {
-  plans: PlanBucket;
+  plans: PlanBucket | null;
   staging: ReadBucket | null;
   /** `null` when the GitHub App is not configured (GITHUB_APP_ID "0"): terraform jobs fail closed. */
   source: SourceDeps | null;
@@ -75,9 +75,11 @@ function prepareReleaseVerify(input: ReleaseVerifyInput, deps: PrepareDeps): Pro
 }
 
 async function preparePlan(request: RunnerJobRequest, subject: TerraformSubject, deps: PrepareDeps): Promise<Preparation> {
+  const plans = deps.plans;
+  if (plans === null) return fail('plans_unbound', 'Terraform plan artifacts are not bound to this runner');
   // Plans are create-only per tree. A complete stored plan for this tree is the reviewed one: report
   // it again instead of failing. Partial debris needs a human (see docs/RUNNER.md).
-  const stored = await storedPlanState(deps.plans, subject.stack, subject.treeSha);
+  const stored = await storedPlanState(plans, subject.stack, subject.treeSha);
   if (stored.kind === 'complete') return { kind: 'finished', outcome: succeeded(stored.summary as unknown as Json) };
   if (stored.kind === 'incomplete') fail('plan_incomplete', `incomplete plan artifacts exist for ${subject.stack} at tree ${subject.treeSha}`);
   const source = requireSource(deps);
@@ -100,11 +102,13 @@ async function preparePlan(request: RunnerJobRequest, subject: TerraformSubject,
 }
 
 async function prepareApply(request: RunnerJobRequest, subject: TerraformSubject, deps: PrepareDeps): Promise<Preparation> {
-  if (await isStackLocked(deps.plans, subject.stack)) fail('stack_locked_uncertain', `stack ${subject.stack} is locked after an uncertain apply; a human must clear it`);
-  const summary = await readPlanSummary(deps.plans, subject.stack, subject.treeSha);
+  const plans = deps.plans;
+  if (plans === null) return fail('plans_unbound', 'Terraform plan artifacts are not bound to this runner');
+  if (await isStackLocked(plans, subject.stack)) fail('stack_locked_uncertain', `stack ${subject.stack} is locked after an uncertain apply; a human must clear it`);
+  const summary = await readPlanSummary(plans, subject.stack, subject.treeSha);
   if (!summary) return fail('plan_missing', `no stored plan for ${subject.stack} at tree ${subject.treeSha}`);
   if (!summary.policyPassed) fail('plan_policy_failed', 'the stored plan did not pass policy');
-  const plan = await digestStoredObject(deps.plans, planObjectKey(subject.stack, subject.treeSha, 'plan.tfplan'), LIMITS.planFileBytes, deps.hashes);
+  const plan = await digestStoredObject(plans, planObjectKey(subject.stack, subject.treeSha, 'plan.tfplan'), LIMITS.planFileBytes, deps.hashes);
   if (!plan) return fail('plan_missing', 'plan.tfplan is missing');
   if (plan.sha256 !== summary.planSha256) fail('plan_digest_mismatch', 'stored plan.tfplan does not match the SHA-256 in summary.json');
   const source = requireSource(deps);
