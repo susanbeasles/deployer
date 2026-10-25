@@ -1,8 +1,7 @@
 # deployer
 
 The deployment control plane inside the Cloudflare boundary. It takes an authorized release and puts
-it into production: verified, recorded, health-checked, and rolled back on failure. It also runs
-OpenTofu for the `infra` stack in a private container.
+it into production: verified, recorded, health-checked, and rolled back on failure. Application infrastructure is exclusively owned and applied by `infra`; foundational infrastructure by `infra-root`.
 
 ## What it does
 
@@ -19,14 +18,15 @@ OpenTofu for the `infra` stack in a private container.
 - **Deploy.** `cloudflare-worker/v1`: upload a version with registry-defined bindings, route 100 % of
   traffic to it, prove it serves through the health contract, commit by compare-and-swap of the
   environment pointer. On failure after a change, every touched target returns to its prior version.
-- **Terraform runner.** `terraform.plan` and `terraform.apply` for `infra` in a container with no
-  credentials of its own (see [docs/RUNNER.md](docs/RUNNER.md)).
+- **Application-only execution.** Terraform RPC requests are rejected before any grant is consumed;
+  the deployed Worker has no Cloudflare Terraform token, state credential, plan-bucket binding, or state passphrase.
 
 ## What it does not do
 
 - Decide anything. The `authorizer` decides; this repo executes.
 - Create, change or delete Terraform-managed resources: buckets, queues, KV, domains, routes,
-  Access. It owns application Worker scripts' code and nothing that points at them.
+  Access. `infra` manages application infrastructure, including bindings, routes and resource lifecycle.
+  The deployer only publishes verified application code to resources already provisioned by `infra`.
 - Deploy `deployer`, `authorizer` or `root-runner`. Those use the bootstrap path only.
 - Build releases. The release workflow (GitHub side) produces them per [docs/CONTRACTS.md](docs/CONTRACTS.md).
 
@@ -56,7 +56,7 @@ worker/
   release/            staging, promotion into the locked bucket, defensive ZIP reader
   adapters/           Cloudflare Workers API, cloudflare-worker/v1, health probe
   github/             App auth, release asset download, Deployments reporting
-  runner/             container runner, egress gate, Terraform jobs
+  runner/             release verification; legacy shared root-runner Terraform library (not callable by the app deployer)
 container/            runner image
 docs/                 ARCHITECTURE, CONTRACTS, IMPLEMENTATION-PLAN, RUNNER, adr/
 test/worker, test/runner
@@ -82,11 +82,12 @@ In order, each with its evidence in the pull request (details in
    locks, lifecycle, the `deploy-requests` queue and DLQ, the `deploy-registry` KV namespace. Put
    its `deploy_registry_namespace_id` output in `wrangler.jsonc`.
 3. Create the `deployer` GitHub App (contents read, deployments write, checks write), land its key
-   in Secrets Store as `DEPLOYER_GITHUB_APP_KEY`, set `GITHUB_APP_ID`. Set the R2 token ids.
+   in Secrets Store as `DEPLOYER_GITHUB_APP_KEY`, set `GITHUB_APP_ID`.
 4. Produce and review the trusted root for `release.verify` (see docs/RUNNER.md).
 5. `npm run check:config`, then deploy through Workers Builds or the one-time bootstrap.
-6. First `infra` plan and apply through this runner: registry value, queue consumer
-   (`deployer_deployed = true`), authorizer edge (`authorizer_deployed = true`).
+6. Commission `infra`'s own Terraform executor, with independently scoped credentials, reviewed
+   saved plans and state archiving. Only that executor may apply the registry value, queue consumer
+   (`deployer_deployed = true`) and authorizer edge (`authorizer_deployed = true`).
 7. Enroll an application: registry entry, `WORKER_<NAME>` token and binding, authorizer policy.
 
 ## Legacy

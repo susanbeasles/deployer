@@ -1,9 +1,11 @@
 # Runner
 
-The runner executes container jobs for the control plane: `release.verify` and `terraform.plan` /
-`terraform.apply` in the deployer, `root.plan` / `root.apply` in the root runner. Both Workers run
-the same code (`worker/runner/`, `container/`) with different bindings; the privilege split is by
-deployment, not by trust in a code path. Contracts: [CONTRACTS.md](CONTRACTS.md) sections 4 and 10.
+The application deployer's runner may execute **only** `release.verify`. It cannot accept a Terraform
+RPC, Terraform plan artifacts, state keys or Cloudflare plan/apply tokens. `terraform.plan` and
+`terraform.apply` belong to the independent **infra-owned executor (not commissioned)**;
+`root.plan` and `root.apply` belong to the distinct privileged `root-runner`. The reviewed
+`worker/runner/` and `container/` libraries may be reused, but runtime identities and
+credentials may not be shared with the application deployer. Contracts: [CONTRACTS.md](CONTRACTS.md) sections 4 and 10.
 Interface: [`worker/runner/api.ts`](../worker/runner/api.ts).
 
 What the runner does not do: decide. Every job arrives after its caller consumed an authorizer
@@ -121,16 +123,16 @@ the job is `running` with no outcome; the gate asks the job's object on every re
 
 | Secret (Secrets Store binding) | Runner | Job types | Where it is used | Reaches the container? |
 |---|---|---|---|---|
-| `CF_PLAN` | deployer | `terraform.plan` | gate: `Authorization: Bearer` to `api.cloudflare.com` | no |
-| `CF_APPLY` | deployer | `terraform.apply` | gate, same | no |
+| `CF_PLAN` | infra executor (not commissioned) | `terraform.plan` | gate: `Authorization: Bearer` to `api.cloudflare.com` | no |
+| `CF_APPLY` | infra executor (not commissioned) | `terraform.apply` | gate, same | no |
 | `CF_ROOT_PLAN` | root | `root.plan` | gate, same | no |
 | `CF_ROOT_APPLY` | root | `root.apply` | gate, same | no |
-| `R2_STATE_RO` (+ var `R2_STATE_RO_TOKEN_ID`) | deployer | `terraform.plan` | gate: SigV4 key id = token id, secret = SHA-256 hex of the value | no |
-| `R2_STATE_RW` (+ `R2_STATE_RW_TOKEN_ID`) | deployer | `terraform.apply` | gate, same | no |
+| `R2_STATE_RO` (+ var `R2_STATE_RO_TOKEN_ID`) | infra executor (not commissioned) | `terraform.plan` | gate: SigV4 key id = token id, secret = SHA-256 hex of the value | no |
+| `R2_STATE_RW` (+ `R2_STATE_RW_TOKEN_ID`) | infra executor (not commissioned) | `terraform.apply` | gate, same | no |
 | `R2_STATE_ROOT` (+ `R2_STATE_ROOT_TOKEN_ID`) | root | `root.plan` (GET/HEAD only), `root.apply` | gate, same | no |
-| `TF_ENCRYPTION_INFRA` | deployer | `terraform.*` | Durable Object → `exec` env `RUNNER_TF_PASSPHRASE` → agent → `TF_ENCRYPTION` of tofu processes only | **yes, in memory, for one job** |
+| `TF_ENCRYPTION_INFRA` | infra executor (not commissioned) | `terraform.*` | Durable Object → `exec` env `RUNNER_TF_PASSPHRASE` → agent → `TF_ENCRYPTION` of tofu processes only | **yes, in memory, for one job** |
 | `TF_ENCRYPTION_ROOT` | root | `root.*` | same | **yes, in memory, for one job** |
-| `GITHUB_APP_KEY` (`DEPLOYER_GITHUB_APP_KEY`) | both | `terraform.*`, `root.*` | Durable Object: tree check, tarballs (`contents: read`), check runs (`checks: write`), Deployments (`deployments: write`) | no |
+| `GITHUB_APP_KEY` | separate, identity-scoped executors | Source verification, check-run and deployment recording as permitted for that service; no infrastructure App key is bound to the app deployer | no |
 | `CF_SECRETS_WRITE` | root | `secrets.generate` | root runner Worker: Secrets Store API | no |
 
 The container's start environment is empty. The passphrase is removed from the agent's own
@@ -152,8 +154,9 @@ migration change, not a runner job.
 All commands run from the owner's sandbox host session (`wrangler` logged in with OAuth), never
 with a pasted token.
 
-- **Inspect a job.** Status: the caller's `jobStatus({ jobId })` (deployer `Deployer`, root runner
-  `RootRunner`). Log: `wrangler r2 object get runner-logs/jobs/<type>/<jobId>/stderr.log --remote --pipe`.
+- **Inspect a job.** Status: use the infra-owned executor for `terraform.*`, and `RootRunner`
+  for `root.*`. The application `Deployer.jobStatus` returns `null` and must never be used to
+  report Terraform completion. Log: `wrangler r2 object get runner-logs/jobs/<type>/<jobId>/stderr.log --remote --pipe`.
   Events: Workers Logs for `deployer` / `root-runner`, filter on the `jobId` field (events
   `runner.*`, `egress.*`; `egress.denied` shows every refused request with host, path and reason).
 - **Clear an uncertain stack lock.** `<plans>` is `tf-plans` for `infra` and `tf-plans-root` for
@@ -181,8 +184,9 @@ with a pasted token.
   its signature, the provider's `SHA256SUMS`, conftest `checksums.txt`, gh `checksums.txt`),
   review, commit them as `ARG` defaults, and deploy. The deployer is rebuilt by its own deploy path;
   the root runner only by the bootstrap path (`wrangler deploy -c wrangler.root-runner.jsonc`).
-- **Do not deploy the deployer while an apply runs.** A deploy restarts the object; the apply ends
-  `uncertain` (`execution_lost`) and locks the stack.
+- **Do not apply through the deployer.** Before commissioning infra Terraform, reconcile any
+  previously running infrastructure jobs and locks. Deployment of application code must not
+  restart an infrastructure executor or borrow its credentials.
 
 ## 7. VERIFY
 

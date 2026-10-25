@@ -23,7 +23,7 @@ export interface GateDeps {
   cloudflareToken(type: RunnerJobType): Promise<string>;
   stateCredentials(type: RunnerJobType): Promise<SigV4Credentials>;
   fetcher: Fetcher;
-  plans: PlanBucket;
+  plans: PlanBucket | null;
   clock: Clock;
 }
 
@@ -65,8 +65,10 @@ export async function handleEgress(request: Request, rawProps: unknown, deps: Ga
 async function forward(request: Request, url: URL, ctx: EgressContext, rule: EgressRule, deps: GateDeps): Promise<Response> {
   switch (rule.kind) {
     case 'artifact-put':
+      if (deps.plans === null) return deny(403, 'plans_unbound');
       return putArtifact(request, rule, deps.plans);
     case 'artifact-get':
+      if (deps.plans === null) return deny(403, 'plans_unbound');
       return getArtifact(rule, deps.plans);
     case 'cloudflare-api': {
       const headers = pick(request.headers, API_HEADERS);

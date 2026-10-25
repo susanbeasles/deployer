@@ -22,6 +22,7 @@ import {
 import { parseConftestOutput } from './policy.mjs';
 import { runTool } from './process.mjs';
 import { extractTarball } from './tar.mjs';
+import { checkTrustedHcl } from './hcl-approval.mjs';
 
 /**
  * `terraform.plan` / `root.plan` and `terraform.apply` / `root.apply`. The stack's code comes from
@@ -75,8 +76,21 @@ function checkConfiguration(src) {
   checkEncryption(files);
 }
 
-function extractStack(ctx, dest) {
-  const src = extract(ctx, 'source.tar.gz', dest);
+/** The stack source path is fixed by trusted runner code, never chosen by a PR. */
+export function pinnedStackRoot(repository, stack) {
+  if (stack === 'infra-root') return repository;
+  if (stack !== 'infra') fail('stack_invalid', 'unknown Terraform stack');
+  const selected = join(repository, 'stack');
+  if (!existsSync(selected) || !lstatSync(selected).isDirectory()) {
+    fail('stack_root_missing', 'infra must contain the reviewed stack/ Terraform root');
+  }
+  return selected;
+}
+
+function extractStack(ctx, dest, stack) {
+  const repository = extract(ctx, 'source.tar.gz', dest);
+  const src = pinnedStackRoot(repository, stack);
+  // Validate exactly the Terraform root that OpenTofu will execute.
   checkConfiguration(src);
   return src;
 }
@@ -108,10 +122,13 @@ export async function runPlan(ctx) {
   const input = validatePlanInput(ctx.envelope.input);
   const out = join(ctx.workdir, 'out');
   mkdirSync(out, { mode: 0o700 });
-  const src = extractStack(ctx, join(ctx.workdir, 'src'));
+  const src = extractStack(ctx, join(ctx.workdir, 'src'), input.stack);
   const policyRepo = extract(ctx, 'policy.tar.gz', join(ctx.workdir, 'policy-repo'));
   const policyDir = join(policyRepo, input.policyDirectory);
   if (!existsSync(policyDir) || !lstatSync(policyDir).isDirectory()) fail('policy_missing', `infra-root main has no ${input.policyDirectory}/ directory`);
+  // Mandatory independent HCL allowlist gate; no Tofu process or egress token
+  // is available to candidate infrastructure until these exact hashes match.
+  checkTrustedHcl(src, policyRepo, input.stack);
 
   await init(ctx, src, input);
   const before = await pullState(ctx, src);
@@ -184,7 +201,7 @@ export async function runApply(ctx) {
   const input = validateApplyInput(ctx.envelope.input, ctx.envelope.jobId);
   const out = join(ctx.workdir, 'out');
   mkdirSync(out, { mode: 0o700 });
-  const src = extractStack(ctx, join(ctx.workdir, 'src'));
+  const src = extractStack(ctx, join(ctx.workdir, 'src'), input.stack);
   await init(ctx, src, input);
 
   const plan = await request(`${input.artifactsOrigin}/plan.tfplan`, { maxBytes: 64 * MiB });

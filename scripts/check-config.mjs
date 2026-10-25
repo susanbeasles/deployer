@@ -3,7 +3,7 @@
 // Run before every deploy of the deployer or the root runner: `npm run check:config`.
 import { readFileSync, existsSync } from 'node:fs';
 
-const files = ['wrangler.jsonc', 'wrangler.root-runner.jsonc'].filter((f) => existsSync(f));
+const files = ['wrangler.jsonc', 'wrangler.root-runner.jsonc', 'wrangler.infra-runner.jsonc'].filter((f) => existsSync(f));
 const stripComments = (text) => text.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 const problems = [];
 

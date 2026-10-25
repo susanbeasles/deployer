@@ -25,11 +25,12 @@ test('terraform-subject/v1 is validated fatally and bound to the stack repositor
 });
 
 test('job requests: exact shape, role, notify and deadline window', () => {
-  assert.equal(parseJobRequest(terraformRequest('terraform.plan'), 'deployer').type, 'terraform.plan');
+  assert.equal(parseJobRequest(terraformRequest('terraform.plan'), 'infra').type, 'terraform.plan');
   assert.equal(parseJobRequest(terraformRequest('root.apply'), 'root').type, 'root.apply');
+  assert.throws(() => parseJobRequest(terraformRequest('terraform.plan'), 'deployer'), { code: 'job_type_not_allowed' });
   assert.throws(() => parseJobRequest(terraformRequest('root.apply'), 'deployer'), { code: 'job_type_not_allowed' });
   assert.throws(() => parseJobRequest(terraformRequest('release.verify' as never), 'root'), { code: 'job_type_not_allowed' });
-  assert.throws(() => parseJobRequest({ ...terraformRequest('terraform.plan'), jobId: '0199e7a0-0000-4000-8000-000000000001' }, 'deployer'), { code: 'invalid_job_request' });
+  assert.throws(() => parseJobRequest({ ...terraformRequest('terraform.plan'), jobId: '0199e7a0-0000-4000-8000-000000000001' }, 'infra'), { code: 'invalid_job_request' });
   assert.throws(
     () => parseJobRequest({ ...terraformRequest('root.plan'), notify: { application: 'a1', environment: 'e1', deploymentId: '0199e7a0-0000-7000-8000-000000000001' } }, 'root'),
     { code: 'invalid_job_request' },

@@ -1,7 +1,7 @@
 # Deployment control plane: architecture
 
-This describes what runs inside the Cloudflare boundary: the authorizer that decides, the deployer
-that executes, the runner that executes Terraform, and the storage they write. GitHub supplies
+This describes the Cloudflare control plane: the authorizer that decides, the application
+deployer that publishes code, the separate infrastructure executors, and their storage. GitHub supplies
 source, releases, attestations and the audit surface; it holds no Cloudflare credential and decides
 nothing. Contracts are in [CONTRACTS.md](CONTRACTS.md); the delivery plan and acceptance criteria
 are in [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md).
@@ -51,13 +51,14 @@ are in [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md).
 | Component | Repo | Kind | Holds |
 |---|---|---|---|
 | `authorizer` | `authorizer` | Worker + `TokenLedger` DO, route `services.susanb.dev/*` | its read-only GitHub App key |
-| `deployer` | `deployer` | Worker, `Coordinator` DO, `RunnerJob` DO with container, `EgressGate` entrypoint, queue consumer; no route, no DNS | deployer GitHub App key, `CF_PLAN`, `CF_APPLY`, `R2_STATE_RO`, `R2_STATE_RW`, `TF_ENCRYPTION_INFRA`, one `WORKER_<NAME>` per target |
+| `deployer` | `deployer` | Application code releases, coordinator, offline release verification, queue consumer; no route, no DNS | deployer GitHub App key and per-target `WORKER_<NAME>` delivery credentials; **no Terraform or state credentials** |
+| `infra` executor (not yet commissioned) | `infra` | Privileged Terraform plan/apply, independent runtime, state and audit | `CF_PLAN`, `CF_APPLY`, `R2_STATE_RO`, `R2_STATE_RW`, `TF_ENCRYPTION_INFRA` in its **own bindings** only |
 | `root-runner` | `deployer` (code), deployed only by the bootstrap path | Worker, `RunnerJob` DO with container; no route, no DNS | `CF_ROOT_APPLY`, `CF_SECRETS_WRITE`, `R2_STATE_ROOT`, `TF_ENCRYPTION_ROOT`, deployer GitHub App key |
 | Terraform `infra-root` | `infra-root` | OpenTofu root | buckets, locks, lifecycle, token inventory, policy layer |
 | Terraform `infra` | `infra` | OpenTofu | queues, registry KV and its value, authorizer domain and edge rules |
 
-The root runner and the deployer run the same runner code with different bindings, so the code is
-reviewed once and the privilege is split by deployment, not by trust in the code path. The deployer
+The root and infra infrastructure executors may reuse reviewed runner libraries, but their
+runtime identities and state/API bindings remain independent from the application deployer. The deployer
 can never deploy `deployer`, `authorizer` or `root-runner` through the artifact path; the registry
 validator forbids those script names.
 
@@ -141,9 +142,9 @@ policy, digest-pinned image in the Cloudflare registry, no route).
 5. Outcome records are final. A mutating job (`terraform.apply`) that ends without an authoritative
    result is `uncertain`, which blocks further applies on that stack until a human resolves it.
 
-Job types: `release.verify` (offline `gh attestation verify` against the pinned trusted root, no
-egress at all), `terraform.plan`, `terraform.apply` (deployer, stack `infra`), and `root.plan`,
-`root.apply` (root runner only, stack `infra-root`). Both runners receive
+Job types: `release.verify` (deployer, offline and no egress), `terraform.plan` and
+`terraform.apply` (**infra-owned executor**, stack `infra`, not yet commissioned), and
+`root.plan` / `root.apply` (root runner only, stack `infra-root`). Only infrastructure executors receive
 `{ type: "terraform.plan" | "terraform.apply", subject: terraform-subject/v1 }`; the grant's action
 says which stack it was minted for.
 
@@ -172,10 +173,10 @@ creates all of it; buckets, queues and the namespace carry `prevent_destroy`):
 | `release-staging` | none | delete after 3 days | deployer |
 | `deploy-state` | indefinite on `ledger/` | none | deployer |
 | `runner-logs` | none | delete after 90 days | deployer, root runner |
-| `tf-state` | none | abort multipart after 1 day | `infra` state; deployer runner through the egress gate |
+| `tf-state` | none | abort multipart after 1 day | `infra` state; infra-owned executor only |
 | `tf-state-root` | none | abort multipart after 1 day | `infra-root` state; root runner only (the deployer's state credential cannot reach it) |
 | `tf-state-archive` | indefinite, whole bucket | none | runners through the egress gate |
-| `tf-plans` | none | delete after 90 days | deployer runner (`infra` plans, stack locks) |
+| `tf-plans` | none | delete after 90 days | infra-owned executor (`infra` plans and stack locks) |
 | `tf-plans-root` | none | delete after 90 days | root runner only (`infra-root` plans, stack lock) |
 
 | Other resource | Name | Notes |
@@ -184,7 +185,7 @@ creates all of it; buckets, queues and the namespace carry `prevent_destroy`):
 | Queue | `deploy-requests-dlq` | alert on depth > 0 |
 | KV namespace | `deploy-registry` | holds the registry value written by `infra` |
 
-Created by `infra` (applied through the deployer's runner):
+Created by `infra` (applied through its independent executor after commissioning):
 
 | Resource | Name | Notes |
 |---|---|---|
@@ -202,11 +203,11 @@ Secrets Store `control-plane` (values minted by `infra-root/provision`, never by
 |---|---|---|
 | `AUTHORIZER_GITHUB_APP_KEY` | authorizer | App `authorizer`: contents, checks, pull requests, attestations read |
 | `DEPLOYER_GITHUB_APP_KEY` | deployer, root runner | App `deployer`: contents read, deployments write, checks write |
-| `CF_PLAN` | deployer | account and zone reads for plans |
-| `CF_APPLY` | deployer | DNS, Access, routes (custom domains need Workers Scripts Write, so the authorizer is served by a DNS record plus route), queue consumers, Workers KV Storage Edit (registry value), zone WAF edit, notifications; no R2 admin, no Workers Scripts, no members, no tokens |
-| `R2_STATE_RO` | deployer | Bucket Item Read on `tf-state` (plans run with `-lock=false`; plan files go through the Worker's `TF_PLANS` binding) |
-| `R2_STATE_RW` | deployer | Bucket Item Write on `tf-state`, `tf-plans`, `tf-state-archive` |
-| `TF_ENCRYPTION_INFRA` | deployer | generated passphrase |
+| `CF_PLAN` | infra executor only | account and zone reads for plans |
+| `CF_APPLY` | infra executor only | DNS, Access, routes, queue consumers, Workers KV Storage Edit (registry value), WAF and notifications; no root authority, no member or token administration |
+| `R2_STATE_RO` | infra executor only | Bucket Item Read on `tf-state`; plans use isolated `TF_PLANS` |
+| `R2_STATE_RW` | infra executor only | Bucket Item Write on `tf-state` and create-only state archives |
+| `TF_ENCRYPTION_INFRA` | infra executor only | state encryption passphrase, never the app deployer |
 | `WORKER_<NAME>` | deployer | Workers Scripts Edit. Cloudflare most likely cannot scope this to one script (VERIFY); the deployer only ever addresses the registry's script for that target, and the registry forbids control-plane script names. Per-target tokens still give separate revocation and audit. |
 | `CF_ROOT_PLAN` | root runner | reads of everything `infra-root` manages, for `root.plan` |
 | `CF_ROOT_APPLY`, `R2_STATE_ROOT`, `TF_ENCRYPTION_ROOT`, `CF_SECRETS_WRITE` | root runner | R2 admin, queues edit, Workers KV namespaces edit, Zero Trust org, Secrets Store write. `TF_ENCRYPTION_ROOT` is generated once by `infra-root/bootstrap/day-zero.sh`. |

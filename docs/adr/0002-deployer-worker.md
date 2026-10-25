@@ -1,6 +1,18 @@
 # ADR-0002: The deployer Worker, its container and its four jobs
 
-Status: proposed
+Status: withdrawn / superseded by the application-only deployer boundary (PR #12)
+
+**DO NOT COMMISSION FROM THIS ADR.** The four-job architecture and all references below to
+`terraform.plan`/`terraform.apply` inside the application deployer, `CF_PLAN`, `CF_APPLY`,
+`R2_STATE_RO`, `R2_STATE_RW` or `TF_ENCRYPTION_INFRA` bindings on `deployer` are historical
+proposal text, not current runtime authority. The app Deployer now rejects Terraform RPC
+before any grant consumption and has no Terraform/state/plan credentials. Application
+infrastructure is applied only by a separate `infra`-owned executor (not yet commissioned);
+foundational infrastructure is applied by `infra-root`'s protected root runner.
+
+Authoritative current contracts: [CONTRACTS.md](../CONTRACTS.md) section 4.2,
+[RUNNER.md](../RUNNER.md) section 5 and [ARCHITECTURE.md](../ARCHITECTURE.md) section 2.
+**Do not use the historical credentials table or bootstrap recipe below to restore authority.**
 Date: 2026-10-15
 Builds on: ADR-0001 (runner library), `infra-root/docs/CONTROL-PLANE-SPEC.md` §5.2 deployer, §5.4, §5.5, §7 Phase 1 deliverable 2, §10
 

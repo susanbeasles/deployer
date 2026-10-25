@@ -1,4 +1,3 @@
-import { parseTerraformSubject } from './runner/subject.ts';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { parseDeploySubject } from './contracts/subject.ts';
 import type { AdmissionResult, DeployKick, DeploymentState, PromotionRequest } from './coordinator/types.ts';
@@ -8,8 +7,6 @@ import { isoAt, log, systemClock, uuidv7 } from './lib/runtime.ts';
 import { PATTERNS, Shape } from './lib/validate.ts';
 import { resolveEnvironment } from './registry/registry.ts';
 import { registry } from './wiring.ts';
-import { getRunnerJobStatus, submitTerraformJob } from './runner/index.ts';
-import type { RunnerJobStatus } from './runner/api.ts';
 
 /**
  * The deployer's only inbound surfaces: RPC from the authorizer (service binding, entrypoint
@@ -88,25 +85,18 @@ export class Deployer extends WorkerEntrypoint<Env> {
     return (await coordinator.status({ application, environment, deploymentId })) as DeploymentState | null;
   }
 
-  async runJob(input: { token: string; job: { type: string; subject: unknown } }): Promise<RunnerJobStatus | { state: 'rejected'; error: string }> {
-    try {
-      const type = input?.job?.type;
-      if (type !== 'terraform.plan' && type !== 'terraform.apply') return { state: 'rejected', error: 'bad_job_type' };
-      const action = type === 'terraform.plan' ? 'infra.plan' : 'infra.apply';
-      // Shape first, as admit and the root runner do: a malformed request must not burn the grant.
-      parseTerraformSubject(input.job.subject, { stack: 'infra', operation: type === 'terraform.plan' ? 'plan' : 'apply' });
-      const denied = await consumeGrant(this.env, input.token, action, input.job.subject);
-      if (denied) return { state: 'rejected', error: denied };
-      return await submitTerraformJob(this.env, input.job.subject, action);
-    } catch (error) {
-      return { state: 'rejected', error: summarize(error).code };
-    }
+  /** Application delivery has no authority to plan or apply infrastructure. */
+  async runJob(_input: unknown): Promise<{ state: 'rejected'; error: string }> {
+    // Reject before parsing or consuming an authorizer grant. A Terraform job
+    // belongs to the infrastructure runner, never the application deployer.
+    return { state: 'rejected', error: 'infra_owned' };
   }
 
-  async jobStatus(input: { jobId: string }): Promise<RunnerJobStatus | null> {
-    const s = new Shape(input, 'bad_request', 'jobStatus', ['jobId']);
-    return getRunnerJobStatus(this.env, s.string('jobId', PATTERNS.uuidv7));
+  /** Terraform status is not exposed through the application deployer. */
+  async jobStatus(_input: unknown): Promise<null> {
+    return null;
   }
+
 }
 
 function parseKick(body: unknown): DeployKick {
