@@ -83,6 +83,7 @@ test('registry: valid, and every guard fires', () => {
   const mutate = (fn: (d: any) => void) => { const d = registryDoc() as any; fn(d); return d; };
   const target = (d: any) => d.applications[0].environments[0].targets[0];
   assert.throws(() => parseRegistry(mutate((d) => (target(d).scriptName = 'deployer'))), /control-plane/);
+  assert.throws(() => parseRegistry(mutate((d) => (target(d).scriptName = 'infra-runner'))), /control-plane/, 'privileged infra-runner cannot be an app target');
   assert.throws(() => parseRegistry(mutate((d) => (target(d).adapter = 'static-assets/v1'))), code('adapter_not_implemented'));
   assert.throws(() => parseRegistry(mutate((d) => (target(d).health.origin = 'http://jobs.susanb.dev'))), code('registry_invalid'));
   assert.throws(() => parseRegistry(mutate((d) => (target(d).health.origin = 'https://jobs.susanb.dev/path'))), code('registry_invalid'));
@@ -96,6 +97,8 @@ test('registry: valid, and every guard fires', () => {
     { name: 'AUTHZ', type: 'service', service: 'authorizer', entrypoint: 'Authorizer' },
     { name: 'DEPLOY', type: 'service', service: 'deployer' },
     { name: 'ROOT', type: 'service', service: 'root-runner', entrypoint: 'RootRunner' },
+    { name: 'INFRA', type: 'service', service: 'infra-runner', entrypoint: 'InfraRunner' },
+    { name: 'INFRA_JOB', type: 'durable_object_namespace', class_name: 'RunnerJob', script_name: 'infra-runner' },
   ]) {
     assert.throws(() => parseRegistry(mutate((d) => target(d).bindings.push(binding))), /control-plane Workers/, binding.name);
   }
