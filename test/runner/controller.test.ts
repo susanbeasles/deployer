@@ -113,7 +113,7 @@ test('release.verify streams staged files, gets no passphrase, and cross-checks 
     sourceRef: 'refs/tags/v1.4.2',
     verifier: 'gh 2.74.0 attestation verify; trusted root sha256:' + 'a'.repeat(64),
   };
-  const h = harness({ script: async () => ({ stdout: resultDoc('succeeded', verified), exitCode: 0 }) });
+  const h = harness({ role: 'deployer', script: async () => ({ stdout: resultDoc('succeeded', verified), exitCode: 0 }) });
   for (const [name, bytes] of Object.entries(RELEASE_BYTES)) h.staging.objects.set(`staging/0199e7a0-0000-7000-8000-0000000000dd/${name}`, { bytes });
   await h.controller.submit(request('release.verify', input));
   const status = await h.drive();
@@ -124,14 +124,14 @@ test('release.verify streams staged files, gets no passphrase, and cross-checks 
   assert.deepEqual(Buffer.from(files.get('release.zip') ?? []), Buffer.from(RELEASE_BYTES['release.zip']));
 
   // A result naming another source commit is not trusted.
-  const lying = harness({ script: async () => ({ stdout: resultDoc('succeeded', { ...verified, sourceDigest: 'b'.repeat(40) }), exitCode: 0 }) });
+  const lying = harness({ role: 'deployer', script: async () => ({ stdout: resultDoc('succeeded', { ...verified, sourceDigest: 'b'.repeat(40) }), exitCode: 0 }) });
   for (const [name, bytes] of Object.entries(RELEASE_BYTES)) lying.staging.objects.set(`staging/0199e7a0-0000-7000-8000-0000000000dd/${name}`, { bytes });
   await lying.controller.submit(request('release.verify', input));
   assert.deepEqual((await lying.drive())?.error?.code, 'result_invalid');
 });
 
 test('release.verify: a staged file that changed is caught while streaming (staging_digest_mismatch)', async () => {
-  const h = harness({ script: async () => ({ stdout: resultDoc('succeeded', {}), exitCode: 0 }) });
+  const h = harness({ role: 'deployer', script: async () => ({ stdout: resultDoc('succeeded', {}), exitCode: 0 }) });
   const tampered = new Uint8Array(RELEASE_BYTES['release.zip']);
   tampered[10] = (tampered[10] ?? 0) ^ 0xff;
   h.staging.objects.set('staging/0199e7a0-0000-7000-8000-0000000000dd/release.zip', { bytes: tampered });
@@ -144,7 +144,7 @@ test('release.verify: a staged file that changed is caught while streaming (stag
   assert.equal(h.container.calls.length, 0, 'the agent never received a complete stdin');
   assert.equal(h.container.running, false);
 
-  const wrongSize = harness();
+  const wrongSize = harness({ role: 'deployer' });
   wrongSize.staging.objects.set('staging/0199e7a0-0000-7000-8000-0000000000dd/release.zip', { bytes: new Uint8Array(3) });
   await wrongSize.controller.submit(request('release.verify', releaseInput()));
   assert.equal((await wrongSize.drive())?.error?.code, 'staging_digest_mismatch');
