@@ -41,8 +41,7 @@
     { "binding": "RELEASES", "bucket_name": "releases" },
     { "binding": "STAGING", "bucket_name": "release-staging" },
     { "binding": "STATE", "bucket_name": "deploy-state" },
-    { "binding": "RUNNER_LOGS", "bucket_name": "runner-logs" },
-    { "binding": "TF_PLANS", "bucket_name": "tf-plans" }
+    { "binding": "RUNNER_LOGS", "bucket_name": "runner-logs" }
   ],
   "kv_namespaces": [
     // COMMISSIONING: infra-root output `deploy_registry_namespace_id`.
