@@ -17,11 +17,7 @@
     "GITHUB_OWNER_ID": "215839550",
     // COMMISSIONING: numeric id of the `deployer` GitHub App.
     "GITHUB_APP_ID": "0",
-    // COMMISSIONING: Cloudflare token ids (not values) of the R2 state tokens, from the seed log.
-    // The R2 S3 access key id is the token id; the secret is derived from the bound value.
-    "R2_STATE_RO_TOKEN_ID": "",
-    "R2_STATE_RW_TOKEN_ID": "",
-    // The runner code is shared with the root runner; this Worker may only run infra and release jobs.
+    // The application deployer never plans or applies infrastructure; Terraform runs in infra or infra-root.
     "RUNNER_ROLE": "deployer"
   },
   "durable_objects": {
@@ -58,12 +54,7 @@
   },
   "services": [{ "binding": "AUTHORIZER", "service": "authorizer", "entrypoint": "Authorizer" }],
   "secrets_store_secrets": [
-    { "binding": "GITHUB_APP_KEY", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "DEPLOYER_GITHUB_APP_KEY" },
-    { "binding": "CF_PLAN", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "CF_PLAN" },
-    { "binding": "CF_APPLY", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "CF_APPLY" },
-    { "binding": "R2_STATE_RO", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "R2_STATE_RO" },
-    { "binding": "R2_STATE_RW", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "R2_STATE_RW" },
-    { "binding": "TF_ENCRYPTION_INFRA", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "TF_ENCRYPTION_INFRA" }
+    { "binding": "GITHUB_APP_KEY", "store_id": "b6504fe2d5f64352954629bc7185fb79", "secret_name": "DEPLOYER_GITHUB_APP_KEY" }
     // Per-target deploy credentials are appended here at enrollment, one per registry target:
     // { "binding": "WORKER_<NAME>", "store_id": "…", "secret_name": "WORKER_<NAME>" }
   ]
