@@ -64,7 +64,7 @@ export class RunnerJob extends DurableObject<RunnerEnv> implements RunnerJobRpc 
       objectName: ctx.id.name ?? null,
       prepare: (request: RunnerJobRequest) =>
         prepareJob(request, {
-          plans: env.TF_PLANS,
+          plans: env.TF_PLANS ?? null,
           staging: env.STAGING ?? null,
           source: app ? { tokens: app, fetcher, hashes } : null,
           passphrase: (r) => statePassphrase(env, r.type),
@@ -72,7 +72,7 @@ export class RunnerJob extends DurableObject<RunnerEnv> implements RunnerJobRpc 
           hashes,
         }),
       logs: env.RUNNER_LOGS,
-      plans: env.TF_PLANS,
+      plans: env.TF_PLANS ?? null,
       report: (record, status) => reportTerraformJob(app ? { tokens: app, fetcher } : null, record.request, status),
       notify: (notify, jobId) => notifyCoordinator(env.COORDINATOR, notify, jobId),
     });
@@ -80,6 +80,9 @@ export class RunnerJob extends DurableObject<RunnerEnv> implements RunnerJobRpc 
 
   async submit(request: RunnerJobRequest): Promise<RunnerJobStatus> {
     try {
+      if (this.env.RUNNER_ROLE === 'deployer' && request.type !== 'release.verify') {
+        throw new DeployError('job_type_not_allowed', 'application deployer cannot execute Terraform jobs');
+      }
       return await this.controller.submit(request);
     } catch (error) {
       // Only name and message cross the RPC boundary, so the stable code leads the message.
@@ -110,7 +113,7 @@ export class EgressGate extends WorkerEntrypoint<RunnerEnv, GateProps> {
       cloudflareToken: (type) => cloudflareToken(env, type),
       stateCredentials: (type) => stateCredentials(env, type),
       fetcher,
-      plans: env.TF_PLANS,
+      plans: env.TF_PLANS ?? null,
       clock: systemClock,
     });
   }
