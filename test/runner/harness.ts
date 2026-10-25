@@ -28,7 +28,7 @@ export function resultDoc(outcome: 'succeeded' | 'failed' | 'uncertain', result:
 }
 
 export interface HarnessOptions {
-  role?: 'deployer' | 'root';
+  role?: 'deployer' | 'infra' | 'root';
   script?: AgentScript;
   github?: ReturnType<typeof fakeGitHub>;
   objectName?: string | null;
@@ -59,7 +59,7 @@ export function harness(options: HarnessOptions = {}) {
     },
     clock,
     sleep: async () => undefined,
-    role: options.role ?? 'deployer',
+    role: options.role ?? 'infra',
     accountId: ACCOUNT,
     objectName: options.objectName === undefined ? JOB_ID : options.objectName,
     prepare: (request: RunnerJobRequest) =>
