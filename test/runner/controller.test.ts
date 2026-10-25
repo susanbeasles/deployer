@@ -187,6 +187,29 @@ test('watchdog: an overrunning plan fails, an overrunning apply is uncertain and
   assert.equal(next.container.starts.length, 0);
 });
 
+test('legacy uncertain apply finalizes cleanup even when its plan bucket disappears', async () => {
+  const h = harness({ script: async () => 'hang' });
+  storePlan(h.plans);
+  await h.controller.submit(terraformRequest('terraform.apply'));
+  await h.controller.alarm();
+  assert.equal(h.container.running, true);
+
+  // A Worker binding migration can remove TF_PLANS after the job started.
+  h.deps.plans = null;
+  h.clock.advance(31 * 60 * 1000);
+  await h.controller.alarm();
+
+  const state = h.controller.status();
+  assert.equal(state?.state, 'uncertain');
+  assert.equal(state?.error?.code, 'stack_lock_unavailable');
+  assert.equal(h.container.running, false, 'legacy container must be destroyed');
+  assert.equal(h.storage.alarm, null, 'job must be terminal, not an endless retry');
+  const record = h.storage.kv.get('job') as { phase: string; stackLocked: boolean };
+  assert.equal(record.phase, 'done');
+  assert.equal(record.stackLocked, false, 'do not claim a lock was written');
+  assert.equal(h.plans.text('locks/infra.json'), null);
+});
+
 test('a failed agent exit is failed for plans and uncertain (with a stack lock) for applies', async () => {
   const plan = harness({ script: async () => ({ stdout: '', exitCode: 3 }) });
   await plan.controller.submit(terraformRequest('terraform.plan'));
