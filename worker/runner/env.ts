@@ -17,7 +17,8 @@ export interface SecretBinding {
 export interface RunnerEnv {
   RUNNER: DurableObjectNamespace;
   RUNNER_LOGS: R2Bucket;
-  TF_PLANS: R2Bucket;
+  /** Only infrastructure executors hold the Terraform plan bucket. */
+  TF_PLANS?: R2Bucket;
   STAGING?: R2Bucket;
   COORDINATOR?: DurableObjectNamespace;
   ACCOUNT_ID: string;
