@@ -138,8 +138,8 @@ test('credential custody table: each job type gets exactly its own credentials',
   );
   assert.deepEqual(table, {
     'release.verify': ['deployer', false, null, null, null, null, null],
-    'terraform.plan': ['deployer', false, 'infra', 'CF_PLAN', 'R2_STATE_RO', 'read', 'TF_ENCRYPTION_INFRA'],
-    'terraform.apply': ['deployer', true, 'infra', 'CF_APPLY', 'R2_STATE_RW', 'write', 'TF_ENCRYPTION_INFRA'],
+    'terraform.plan': ['infra', false, 'infra', 'CF_PLAN', 'R2_STATE_RO', 'read', 'TF_ENCRYPTION_INFRA'],
+    'terraform.apply': ['infra', true, 'infra', 'CF_APPLY', 'R2_STATE_RW', 'write', 'TF_ENCRYPTION_INFRA'],
     'root.plan': ['root', false, 'infra-root', 'CF_ROOT_PLAN', 'R2_STATE_ROOT', 'read', 'TF_ENCRYPTION_ROOT'],
     'root.apply': ['root', true, 'infra-root', 'CF_ROOT_APPLY', 'R2_STATE_ROOT', 'write', 'TF_ENCRYPTION_ROOT'],
   });
