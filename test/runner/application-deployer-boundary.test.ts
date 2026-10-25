@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { prepareJob } from '../../worker/runner/prepare.ts';
 import { terraformRequest } from './builders.ts';
 
