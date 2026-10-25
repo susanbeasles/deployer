@@ -222,7 +222,7 @@ request body except fields the policy then checked.
 For `intent: "rollback"`, `assets` may be `null`: a rollback can only target a release the deployer
 has already ingested and previously committed.
 
-### 3.1 `terraform-subject/v1` (authorizer → deployer or root runner)
+### 3.1 `terraform-subject/v1` (authorizer → infra-owned or root executor)
 
 ```json
 {
@@ -242,8 +242,10 @@ has already ingested and previously committed.
 For a plan, `commit` is the pull request's merge commit and `headSha` the head it was built from.
 For an apply, `commit` is the head of `main` (the squash merge of `pullRequest`). Plans are stored and
 looked up by `treeSha`, because the promoter's squash merge changes the commit but not the tree.
-Stack `infra` runs in the deployer with grant actions `infra.plan`/`infra.apply`; stack
-`infra-root` runs in the root runner with `root.plan`/`root.apply`.
+Stack `infra` runs **only in an infra-owned executor** with grant actions `infra.plan`/
+`infra.apply` (not yet commissioned). Stack `infra-root` runs in the separate privileged
+root runner with `root.plan`/`root.apply`. The application deployer has no Terraform RPC or
+state credentials; Authorizer must route `infra.*` to the infra-owned executor, not `DEPLOYER`.
 
 ## 4. Service-binding RPC
 
@@ -270,8 +272,8 @@ for stack `infra`, `root.plan`/`root.apply` for stack `infra-root`.
 ```ts
 admit(input: { token: string; subject: DeploySubjectV1 }): Promise<AdmissionResult>
 status(input: { application: string; environment: string; deploymentId: string }): Promise<StatusResult>
-runJob(input: { token: string; job: { type: "terraform.plan" | "terraform.apply"; subject: TerraformSubjectV1 } }): Promise<RunnerJobStatus>
-jobStatus(input: { jobId: string }): Promise<RunnerJobStatus>
+runJob(input: unknown): Promise<{ state: "rejected"; error: "infra_owned" }>
+jobStatus(input: unknown): Promise<null>
 
 type AdmissionResult =
   | { status: "QUEUED"; deploymentId: string; githubDeploymentId: number | null }
@@ -280,14 +282,17 @@ type AdmissionResult =
 ```
 
 The authorizer answers `503 unavailable` for `registry_unavailable` and `internal` and `409` for
-every other `REJECTED` error. `RunnerJobStatus` is defined in `worker/runner/api.ts`; the root
-runner exposes the same `runJob`/`jobStatus` on its entrypoint `RootRunner`.
+every other `REJECTED` error. The application deployer **always** refuses a Terraform
+`runJob` with `infra_owned` before consuming a grant; its legacy `jobStatus` returns `null`.
+`RunnerJobStatus` is defined in `worker/runner/api.ts`; the root runner retains its own
+`runJob`/`jobStatus`, and `infra` needs a separate commissioned execution service.
 
 The deployer hashes `token`, calls `AUTHORIZER.consume` with the action and subject, and acts only
 on `ok: true`. Only the request's shape is checked first (a malformed request cannot burn a grant,
 and the grant is bound to the subject's digest anyway); the grant is consumed before every other
-check, so a request that is rejected later can never be replayed. `admit`, `runJob` and the root
-runner's `runJob` all follow this order. Idempotency: the same token can never be consumed twice; the coordinator
+check, so a request that is rejected later can never be replayed. **Only** `admit` and the
+root runner's `runJob` follow this order here; `Deployer.runJob` refuses Terraform **before**
+calling `AUTHORIZER.consume`. Idempotency: the same token can never be consumed twice; the coordinator
 also maps each token hash to the deployment it created, and a request for a release already in
 flight joins that deployment. `requestId` is a fresh UUIDv7 per admission.
 
@@ -505,7 +510,8 @@ Job types and inputs:
 
 - `release.verify`: `{ repository, sourceCommit, releaseTag, signerWorkflow, files: [{ name, sha256, size }] }`.
   Files follow the envelope on stdin, length-prefixed in the order listed.
-- `terraform.plan` / `terraform.apply` (deployer, stack `infra`) and `root.plan` / `root.apply`
+- `terraform.plan` / `terraform.apply` (infra-owned executor, stack `infra`, not commissioned) and
+  `root.plan` / `root.apply`
   (root runner, stack `infra-root`): the `terraform-subject/v1` from section 3.1. The runner adds
   the repository tarball at `commit` and the policy bundle from `infra-root` `main` on stdin; an
   apply finds its plan under `tf-plans/{stack}/{treeSha}/` and refuses unless the plan's SHA-256,
