@@ -6,8 +6,8 @@ import type { RunnerJobType } from './api.ts';
  * for it. Code reads these tables; it never branches on a credential name by hand.
  */
 
-/** The deployer Worker runs `release.verify` and `terraform.*`; the root runner runs `root.*` only. */
-export type RunnerRole = 'deployer' | 'root';
+/** Separate application, infra and root runtime identities. Shared libraries do not share credentials. */
+export type RunnerRole = 'deployer' | 'infra' | 'root';
 
 export type StackName = 'infra' | 'infra-root';
 
@@ -80,7 +80,7 @@ export const JOB_PROFILES: Readonly<Record<RunnerJobType, JobProfile>> = {
   },
   'terraform.plan': {
     type: 'terraform.plan',
-    role: 'deployer',
+    role: 'infra',
     operation: 'plan',
     mutating: false,
     stack: 'infra',
@@ -91,7 +91,7 @@ export const JOB_PROFILES: Readonly<Record<RunnerJobType, JobProfile>> = {
   },
   'terraform.apply': {
     type: 'terraform.apply',
-    role: 'deployer',
+    role: 'infra',
     operation: 'apply',
     mutating: true,
     stack: 'infra',
@@ -133,7 +133,7 @@ export function profileOf(type: RunnerJobType): JobProfile {
 
 /** `RUNNER_ROLE` is set to `root` only in `wrangler.root-runner.jsonc`; anything else is the deployer. */
 export function roleOf(value: unknown): RunnerRole {
-  return value === 'root' ? 'root' : 'deployer';
+  return value === 'root' ? 'root' : value === 'infra' ? 'infra' : 'deployer';
 }
 
 /** No unknown/default role may regain Terraform authority at the application boundary.
@@ -142,5 +142,5 @@ export function roleOf(value: unknown): RunnerRole {
  */
 export function permitsWorkerJob(configuredRole: unknown, type: RunnerJobType): boolean {
   const role = roleOf(configuredRole);
-  return role === 'root' ? JOB_PROFILES[type]?.role === 'root' : type === 'release.verify';
+  return role === 'deployer' ? type === 'release.verify' : JOB_PROFILES[type]?.role === role;
 }
