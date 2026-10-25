@@ -135,3 +135,12 @@ export function profileOf(type: RunnerJobType): JobProfile {
 export function roleOf(value: unknown): RunnerRole {
   return value === 'root' ? 'root' : 'deployer';
 }
+
+/** No unknown/default role may regain Terraform authority at the application boundary.
+ * The existing root-runner is the only permitted root executor; the infra
+ * executor must be commissioned separately, never enabled by a typo here.
+ */
+export function permitsWorkerJob(configuredRole: unknown, type: RunnerJobType): boolean {
+  const role = roleOf(configuredRole);
+  return role === 'root' ? JOB_PROFILES[type]?.role === 'root' : type === 'release.verify';
+}
