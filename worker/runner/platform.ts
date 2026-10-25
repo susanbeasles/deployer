@@ -12,7 +12,7 @@ import { cloudflareToken, stateCredentials, statePassphrase, type RunnerEnv } fr
 import { reportTerraformJob } from './github-report.ts';
 import { notifyCoordinator } from './notify.ts';
 import { prepareJob } from './prepare.ts';
-import { roleOf } from './profiles.ts';
+import { permitsWorkerJob, roleOf } from './profiles.ts';
 import type { HashFactory } from './streams.ts';
 
 /**
@@ -80,7 +80,7 @@ export class RunnerJob extends DurableObject<RunnerEnv> implements RunnerJobRpc 
 
   async submit(request: RunnerJobRequest): Promise<RunnerJobStatus> {
     try {
-      if (this.env.RUNNER_ROLE === 'deployer' && request.type !== 'release.verify') {
+      if (!permitsWorkerJob(this.env.RUNNER_ROLE, request.type)) {
         throw new DeployError('job_type_not_allowed', 'application deployer cannot execute Terraform jobs');
       }
       return await this.controller.submit(request);
